@@ -1,20 +1,17 @@
-from fastapi import FastAPI, UploadFile, File, Form
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from typing import Dict, Any
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-import shutil, os
-from loguru import logger
-from pipeline import orchestrate_pipeline
 from fastapi.staticfiles import StaticFiles
-from fastapi import HTTPException
 from fastapi.responses import FileResponse
-from pathlib import Path
-import shutil, tempfile, os
+from loguru import logger
+import shutil, os, tempfile
 
 JOBS_ROOT = Path(os.getenv("JOBS_ROOT", "/data/jobs"))
 
 app = FastAPI()
 
+# 작업 산출물/로그 정적 서빙
 app.mount("/files/jobs", StaticFiles(directory="/data/jobs"), name="jobfiles")
 
 def save_upload(u: UploadFile) -> Path:
@@ -23,6 +20,8 @@ def save_upload(u: UploadFile) -> Path:
     with tmp as out:
         shutil.copyfileobj(u.file, out)
     return Path(tmp.name)
+
+from pipeline import orchestrate_pipeline  # 나중에 import(로거 설정 이후)
 
 @app.post("/rfantibody_pipeline")
 async def rfantibody_pipeline(
@@ -37,6 +36,7 @@ async def rfantibody_pipeline(
 ) -> Dict[str, Any]:
     fw = save_upload(frameworkFile)
     tg = save_upload(targetFile)
+    logger.info(f"[submit] jobName={jobName} mode={mode} RF={rfDiffusionDesigns} MPNN={proteinMPNNDesigns}")
     try:
         result = orchestrate_pipeline(
             job_name=jobName,
@@ -48,20 +48,27 @@ async def rfantibody_pipeline(
             framework_path_host=fw,
             target_path_host=tg,
         )
+        # 실패 시 로그 일부를 서버 로그에도 남김
+        if result.get("status") == "error":
+            stage = result.get("stage")
+            tail  = result.get("log_tail","")
+            logger.error(f"[pipeline-error] stage={stage}\n{tail}")
+        else:
+            logger.info(f"[pipeline-done] jobId={result.get('jobId')} status={result.get('status')}")
         return result
     except Exception as e:
-        logger.info(f"Exception during pipeline execution: {e}")
+        logger.exception(f"Exception during pipeline execution: {e}")
+        raise
     finally:
-        
-        if fw.exists() and fw.parent == Path("/tmp"):
-            try: fw.unlink()
-            except: pass
-        if tg.exists() and tg.parent == Path("/tmp"):
-            try: tg.unlink()
-            except: pass
+        # 임시 업로드 삭제(성공 시 orchestrate_pipeline이 job 디렉터리로 이동함)
+        for p in (fw, tg):
+            try:
+                if p.exists() and p.parent == Path("/tmp"):
+                    p.unlink()
+            except Exception:
+                pass
 
 def safe_job_dir(job_id: str) -> Path:
-    
     p = (JOBS_ROOT / job_id).resolve()
     if not str(p).startswith(str(JOBS_ROOT.resolve())):
         raise HTTPException(status_code=400, detail="invalid job id")
@@ -73,12 +80,17 @@ def download_job_archive(job_id: str):
     out_dir = job_dir / "output"
     if not out_dir.exists():
         raise HTTPException(status_code=404, detail="output not found")
+    # 실제 파일 있는지 확인
+    try:
+        next(out_dir.rglob("*"))
+    except StopIteration:
+        raise HTTPException(status_code=404, detail="no artifacts")
 
     tmpdir = tempfile.mkdtemp()
     zip_path = Path(tmpdir) / f"{job_id}_output.zip"
-    
+    # zip 생성
     shutil.make_archive(zip_path.with_suffix(""), "zip", root_dir=out_dir)
-    
+    logger.info(f"[download] jobId={job_id} -> zip ready")
     return FileResponse(
         path=str(zip_path),
         media_type="application/zip",
