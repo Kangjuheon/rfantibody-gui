@@ -14,10 +14,16 @@ services:
       - JOBS_ROOT=/data/jobs
       - RFANTIBODY_IMAGE=rfantibody:latest
       - RF_WEIGHTS_HOST=./third_party/RFantibody/weights
+      - HOST_DATA_DIR=${PWD}/data
+      - HOST_WEIGHTS_DIR=${PWD}/third_party/RFantibody/weights
+      - HOST_CODE_DIR=${PWD}/third_party/RFantibody
     volumes:
       - ./backend:/app
       - ./data:/data
       - /var/run/docker.sock:/var/run/docker.sock
+    command: >
+      sh -c "mkdir -p \"${JOBS_ROOT:-/data/jobs}\" &&
+            uvicorn main:app --host 0.0.0.0 --port 2782 --reload"
 
   frontend:
     build:

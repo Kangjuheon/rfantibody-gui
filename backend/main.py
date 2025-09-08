@@ -11,7 +11,7 @@ JOBS_ROOT = Path(os.getenv("JOBS_ROOT", "/data/jobs"))
 
 app = FastAPI()
 
-# 작업 산출물/로그 정적 서빙
+
 app.mount("/files/jobs", StaticFiles(directory="/data/jobs"), name="jobfiles")
 
 def save_upload(u: UploadFile) -> Path:
@@ -21,7 +21,7 @@ def save_upload(u: UploadFile) -> Path:
         shutil.copyfileobj(u.file, out)
     return Path(tmp.name)
 
-from pipeline import orchestrate_pipeline  # 나중에 import(로거 설정 이후)
+from pipeline import orchestrate_pipeline  
 
 @app.post("/rfantibody_pipeline")
 async def rfantibody_pipeline(
@@ -48,7 +48,7 @@ async def rfantibody_pipeline(
             framework_path_host=fw,
             target_path_host=tg,
         )
-        # 실패 시 로그 일부를 서버 로그에도 남김
+        
         if result.get("status") == "error":
             stage = result.get("stage")
             tail  = result.get("log_tail","")
@@ -60,7 +60,7 @@ async def rfantibody_pipeline(
         logger.exception(f"Exception during pipeline execution: {e}")
         raise
     finally:
-        # 임시 업로드 삭제(성공 시 orchestrate_pipeline이 job 디렉터리로 이동함)
+        
         for p in (fw, tg):
             try:
                 if p.exists() and p.parent == Path("/tmp"):
@@ -80,7 +80,7 @@ def download_job_archive(job_id: str):
     out_dir = job_dir / "output"
     if not out_dir.exists():
         raise HTTPException(status_code=404, detail="output not found")
-    # 실제 파일 있는지 확인
+    
     try:
         next(out_dir.rglob("*"))
     except StopIteration:
@@ -88,7 +88,7 @@ def download_job_archive(job_id: str):
 
     tmpdir = tempfile.mkdtemp()
     zip_path = Path(tmpdir) / f"{job_id}_output.zip"
-    # zip 생성
+    
     shutil.make_archive(zip_path.with_suffix(""), "zip", root_dir=out_dir)
     logger.info(f"[download] jobId={job_id} -> zip ready")
     return FileResponse(

@@ -37,7 +37,7 @@ docker compose --profile builder build rfantibody
 
 3. Launch Docker containers
 ```bash
-docker compose up -d
+docker compose up -d --build
 ```
 
 ## 🌐 Access

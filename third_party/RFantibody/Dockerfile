@@ -18,4 +18,4 @@ RUN pip install poetry
 # Set the working directory to the user's home directory
 WORKDIR /home
 
-ENTRYPOINT /bin/bash
+CMD ["/bin/bash"]
