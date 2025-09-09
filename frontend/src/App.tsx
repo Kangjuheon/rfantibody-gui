@@ -1,3 +1,4 @@
+// App.tsx
 import { useState } from "react";
 import { Button } from "./components/ui/button";
 import { Input } from "./components/ui/input";
@@ -28,47 +29,36 @@ import { Download, Info, Play, Loader2 } from "lucide-react";
 export default function App() {
   const [jobName, setJobName] = useState("");
   const [mode, setMode] = useState("Antibody");
-  const [frameworkFile, setFrameworkFile] =
-    useState<File | null>(null);
-  const [targetFile, setTargetFile] = useState<File | null>(
-    null,
-  );
+  const [frameworkFile, setFrameworkFile] = useState<File | null>(null);
+  const [targetFile, setTargetFile] = useState<File | null>(null);
   const [hotspots, setHotspots] = useState("");
-  const [hotspotsIsPlaceholder, setHotspotsIsPlaceholder] =
-    useState(true);
-  const [rfDiffusionDesigns, setRfDiffusionDesigns] =
-    useState("1");
-  const [proteinMPNNDesigns, setProteinMPNNDesigns] =
-    useState("1");
+  const [hotspotsIsPlaceholder, setHotspotsIsPlaceholder] = useState(true);
+  const [rfDiffusionDesigns, setRfDiffusionDesigns] = useState("1");
   const [designLoops, setDesignLoops] = useState("");
-  const [
-    designLoopsIsPlaceholder,
-    setDesignLoopsIsPlaceholder,
-  ] = useState(true);
+  const [designLoopsIsPlaceholder, setDesignLoopsIsPlaceholder] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
 
   // NEW: API 결과/에러 상태
   const [result, setResult] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // NEW: 추가된 RFdiffusion 세부 파라미터 (누락됐던 state + setter)
+  const [rfDiffusionFinalStep, setRfDiffusionFinalStep] = useState("48");
+  const [rfDiffusionDeterministic, setRfDiffusionDeterministic] = useState(false);
+  const [rfDiffusionDiffuserT, setRfDiffusionDiffuserT] = useState("50");
+
   // Default placeholders
   const defaultHotspots = "T305,T456";
-  const defaultDesignLoops =
-    "L1:8-13,L2:7,L3:9-11,H1:7,H2:6,H3:5-13";
+  const defaultDesignLoops = "L1:8-13,L2:7,L3:9-11,H1:7,H2:6,H3:5-13";
 
   const generateDefaultJobName = () => {
     const now = new Date();
-    const timestamp = now
-      .toISOString()
-      .slice(0, 19)
-      .replace(/[:.]/g, "-");
+    const timestamp = now.toISOString().slice(0, 19).replace(/[:.]/g, "-");
     return `RFantibody_${timestamp}`;
   };
 
-  const getEffectiveJobName = () =>
-    jobName.trim() || generateDefaultJobName();
-  const getEffectiveHotspots = () =>
-    hotspotsIsPlaceholder ? defaultHotspots : hotspots;
+  const getEffectiveJobName = () => jobName.trim() || generateDefaultJobName();
+  const getEffectiveHotspots = () => (hotspotsIsPlaceholder ? defaultHotspots : hotspots);
   const getEffectiveDesignLoops = () =>
     designLoopsIsPlaceholder ? defaultDesignLoops : designLoops;
 
@@ -78,8 +68,7 @@ export default function App() {
       frameworkFile !== null &&
       targetFile !== null &&
       effectiveHotspots.trim() !== "" &&
-      parseInt(rfDiffusionDesigns) > 0 &&
-      parseInt(proteinMPNNDesigns) > 0
+      parseInt(rfDiffusionDesigns) > 0
     );
   };
 
@@ -99,33 +88,23 @@ export default function App() {
       fd.append("jobName", effectiveJobName);
       fd.append("mode", mode);
       fd.append("hotspots", getEffectiveHotspots());
-      fd.append(
-        "rfDiffusionDesigns",
-        String(parseInt(rfDiffusionDesigns)),
-      );
-      fd.append(
-        "proteinMPNNDesigns",
-        String(parseInt(proteinMPNNDesigns)),
-      );
+      fd.append("rfDiffusionDesigns", String(parseInt(rfDiffusionDesigns)));
       fd.append("designLoops", getEffectiveDesignLoops());
 
-      if (frameworkFile)
-        fd.append(
-          "frameworkFile",
-          frameworkFile,
-          frameworkFile.name,
-        );
-      if (targetFile)
-        fd.append("targetFile", targetFile, targetFile.name);
+      // NEW: 추가된 RFdiffusion 세부 파라미터를 FormData에 포함
+      fd.append("rfDiffusionFinalStep", String(parseInt(rfDiffusionFinalStep)));
+      fd.append("rfDiffusionDeterministic", String(rfDiffusionDeterministic));
+      fd.append("rfDiffusionDiffuserT", String(parseInt(rfDiffusionDiffuserT)));
 
-      const resp = await fetch(
-        `${API_BASE}/rfantibody_pipeline`,
-        {
-          method: "POST",
-          body: fd,
-          // Content-Type는 FormData가 자동 설정 (절대 수동 설정하지 말 것)
-        },
-      );
+      if (frameworkFile)
+        fd.append("frameworkFile", frameworkFile, frameworkFile.name);
+      if (targetFile) fd.append("targetFile", targetFile, targetFile.name);
+
+      const resp = await fetch(`${API_BASE}/rfantibody_pipeline`, {
+        method: "POST",
+        body: fd,
+        // Content-Type는 FormData가 자동 설정 (수동 설정 금지)
+      });
 
       if (!resp.ok) {
         const text = await resp.text();
@@ -153,13 +132,11 @@ export default function App() {
           <div className="mb-8 relative">
             <div className="absolute top-0 right-0">
               <Badge variant="secondary" className="text-xs">
-                v1.0.7
+                v1.2.8
               </Badge>
             </div>
             <div className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              <h1 className="mb-2 text-4xl font-bold">
-                Use RFantibody
-              </h1>
+              <h1 className="mb-2 text-4xl font-bold">Use RFantibody</h1>
             </div>
           </div>
 
@@ -174,11 +151,9 @@ export default function App() {
                   </TooltipTrigger>
                   <TooltipContent>
                     <p className="max-w-xs">
-                      Provide a name or description for your job
-                      to help you organize and track its
-                      results. This input is solely for
-                      organizational purposes and does not
-                      impact the outcome of the job.
+                      Provide a name or description for your job to help you
+                      organize and track its results. This input is solely for
+                      organizational purposes and does not impact the outcome of the job.
                     </p>
                   </TooltipContent>
                 </Tooltip>
@@ -186,9 +161,7 @@ export default function App() {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                <Label htmlFor="jobName">
-                  Job Name / Description
-                </Label>
+                <Label htmlFor="jobName">Job Name / Description</Label>
                 <Input
                   id="jobName"
                   placeholder={`Enter job name (default: ${generateDefaultJobName()})`}
@@ -199,9 +172,7 @@ export default function App() {
                 {!jobName.trim() && (
                   <p className="text-xs text-muted-foreground">
                     Will use default name:{" "}
-                    <span className="font-mono">
-                      {generateDefaultJobName()}
-                    </span>
+                    <span className="font-mono">{generateDefaultJobName()}</span>
                   </p>
                 )}
               </div>
@@ -232,12 +203,8 @@ export default function App() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Antibody">
-                      Antibody
-                    </SelectItem>
-                    <SelectItem value="Nanobody">
-                      Nanobody
-                    </SelectItem>
+                    <SelectItem value="Antibody">Antibody</SelectItem>
+                    <SelectItem value="Nanobody">Nanobody</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -252,9 +219,8 @@ export default function App() {
                     </TooltipTrigger>
                     <TooltipContent>
                       <p className="max-w-xs">
-                        Input framework template for the design.
-                        The expected type (Antibody or Nanobody)
-                        depends on the selected 'Mode'.
+                        Input framework template for the design. The expected type
+                        (Antibody or Nanobody) depends on the selected 'Mode'.
                       </p>
                     </TooltipContent>
                   </Tooltip>
@@ -275,9 +241,7 @@ export default function App() {
                       <Info className="w-4 h-4 text-muted-foreground" />
                     </TooltipTrigger>
                     <TooltipContent>
-                      <p>
-                        Input target protein for the design.
-                      </p>
+                      <p>Input target protein for the design.</p>
                     </TooltipContent>
                   </Tooltip>
                 </Label>
@@ -290,10 +254,7 @@ export default function App() {
 
               {/* Hotspots */}
               <div className="space-y-2">
-                <Label
-                  htmlFor="hotspots"
-                  className="flex items-center gap-2"
-                >
+                <Label htmlFor="hotspots" className="flex items-center gap-2">
                   Hotspots
                   <Tooltip>
                     <TooltipTrigger>
@@ -301,13 +262,11 @@ export default function App() {
                     </TooltipTrigger>
                     <TooltipContent>
                       <p className="max-w-sm">
-                        Specify key residues on the target
-                        protein to guide binding. Provide a
-                        comma-separated list. Each item can be a
-                        single residue (e.g., 'A21') or a range
-                        (e.g., 'B14-21'). Uses 1-based
-                        numbering. Designs focusing on
-                        hydrophobic residues work best.
+                        Specify key residues on the target protein to guide binding.
+                        Provide a comma-separated list. Each item can be a single
+                        residue (e.g., 'A21') or a range (e.g., 'B14-21'). Uses
+                        1-based numbering. Designs focusing on hydrophobic residues
+                        work best.
                       </p>
                     </TooltipContent>
                   </Tooltip>
@@ -316,11 +275,7 @@ export default function App() {
                   id="hotspots"
                   placeholder="e.g., T305,T456"
                   autoComplete="off"
-                  value={
-                    hotspotsIsPlaceholder
-                      ? defaultHotspots
-                      : hotspots
-                  }
+                  value={hotspotsIsPlaceholder ? defaultHotspots : hotspots}
                   onFocus={() => {
                     if (hotspotsIsPlaceholder) {
                       setHotspots("");
@@ -332,8 +287,7 @@ export default function App() {
                     setHotspotsIsPlaceholder(false);
                   }}
                   onBlur={(e) => {
-                    if (e.target.value.trim() === "")
-                      setHotspotsIsPlaceholder(true);
+                    if (e.target.value.trim() === "") setHotspotsIsPlaceholder(true);
                   }}
                   className={`w-full ${hotspotsIsPlaceholder ? "text-muted-foreground" : ""}`}
                 />
@@ -341,10 +295,7 @@ export default function App() {
 
               {/* Design Loops */}
               <div className="space-y-2">
-                <Label
-                  htmlFor="designLoops"
-                  className="flex items-center gap-2"
-                >
+                <Label htmlFor="designLoops" className="flex items-center gap-2">
                   Design Loops
                   <Tooltip>
                     <TooltipTrigger>
@@ -352,14 +303,11 @@ export default function App() {
                     </TooltipTrigger>
                     <TooltipContent>
                       <p className="max-w-md">
-                        Specify which CDR loops (H1, H2, H3, L1,
-                        L2, L3) to design and optionally
-                        constrain their lengths. Each item
-                        follows the format: 'LOOP',
-                        'LOOP:LENGTH' or 'LOOP:START-END'.
-                        Examples: 'H1', 'L2:7', 'H3:5-13'. If
-                        omitted, loops remain fixed from the
-                        input framework.
+                        Specify which CDR loops (H1, H2, H3, L1, L2, L3) to design
+                        and optionally constrain their lengths. Each item follows the
+                        format: 'LOOP', 'LOOP:LENGTH' or 'LOOP:START-END'. Examples:
+                        'H1', 'L2:7', 'H3:5-13'. If omitted, loops remain fixed from
+                        the input framework.
                       </p>
                     </TooltipContent>
                   </Tooltip>
@@ -368,11 +316,7 @@ export default function App() {
                   id="designLoops"
                   placeholder="e.g., L1:8-13,L2:7,L3:9-11,H1:7,H2:6,H3:5-13"
                   autoComplete="off"
-                  value={
-                    designLoopsIsPlaceholder
-                      ? defaultDesignLoops
-                      : designLoops
-                  }
+                  value={designLoopsIsPlaceholder ? defaultDesignLoops : designLoops}
                   onFocus={() => {
                     if (designLoopsIsPlaceholder) {
                       setDesignLoops("");
@@ -384,8 +328,7 @@ export default function App() {
                     setDesignLoopsIsPlaceholder(false);
                   }}
                   onBlur={(e) => {
-                    if (e.target.value.trim() === "")
-                      setDesignLoopsIsPlaceholder(true);
+                    if (e.target.value.trim() === "") setDesignLoopsIsPlaceholder(true);
                   }}
                   className={`w-full ${designLoopsIsPlaceholder ? "text-muted-foreground" : ""}`}
                 />
@@ -399,11 +342,9 @@ export default function App() {
               <CardTitle>Design Parameters</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
+              {/* RFdiffusion Backbone Designs */}
               <div className="space-y-2">
-                <Label
-                  htmlFor="rfDiffusion"
-                  className="flex items-center gap-2"
-                >
+                <Label htmlFor="rfDiffusion" className="flex items-center gap-2">
                   RFdiffusion Backbone Designs
                   <Tooltip>
                     <TooltipTrigger>
@@ -411,12 +352,7 @@ export default function App() {
                     </TooltipTrigger>
                     <TooltipContent>
                       <p className="max-w-sm">
-                        Number of distinct backbone structures
-                        to generate using RFdiffusion. The total
-                        number of final designs will be this
-                        value multiplied by the 'Number of
-                        ProteinMPNN Designs'. Higher values
-                        increase runtime and credit usage.
+                        Number of distinct backbone structures to generate using RFdiffusion.
                       </p>
                     </TooltipContent>
                   </Tooltip>
@@ -426,41 +362,83 @@ export default function App() {
                   type="number"
                   min="1"
                   value={rfDiffusionDesigns}
-                  onChange={(e) =>
-                    setRfDiffusionDesigns(e.target.value)
-                  }
+                  onChange={(e) => setRfDiffusionDesigns(e.target.value)}
                   className="w-full"
                 />
               </div>
 
+              {/* rfDiffusion Final Step */}
               <div className="space-y-2">
-                <Label
-                  htmlFor="proteinMPNN"
-                  className="flex items-center gap-2"
-                >
-                  ProteinMPNN Designs
+                <Label htmlFor="rfDiffusionFinalStep" className="flex items-center gap-2">
+                  RFdiffusion Final Step
                   <Tooltip>
                     <TooltipTrigger>
                       <Info className="w-4 h-4 text-muted-foreground" />
                     </TooltipTrigger>
                     <TooltipContent>
                       <p className="max-w-sm">
-                        The number of ProteinMPNN sequences to
-                        generate for each RFdiffusion backbone.
-                        Higher values increase runtime and
-                        credit usage.
+                        Number of refinement steps for RFdiffusion. Higher values may
+                        improve quality but increase runtime.
                       </p>
                     </TooltipContent>
                   </Tooltip>
                 </Label>
                 <Input
-                  id="proteinMPNN"
+                  id="rfDiffusionFinalStep"
                   type="number"
                   min="1"
-                  value={proteinMPNNDesigns}
-                  onChange={(e) =>
-                    setProteinMPNNDesigns(e.target.value)
-                  }
+                  value={rfDiffusionFinalStep}
+                  onChange={(e) => setRfDiffusionFinalStep(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+
+              {/* rfDiffusion Deterministic */}
+              <div className="space-y-2">
+                <Label htmlFor="rfDiffusionDeterministic" className="flex items-center gap-2">
+                  RFdiffusion Deterministic
+                  <Tooltip>
+                    <TooltipTrigger>
+                      <Info className="w-4 h-4 text-muted-foreground" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="max-w-sm">
+                        If enabled, results will be deterministic (reproducible).
+                        Default is False.
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </Label>
+                <input
+                  id="rfDiffusionDeterministic"
+                  type="checkbox"
+                  checked={rfDiffusionDeterministic}
+                  onChange={(e) => setRfDiffusionDeterministic(e.target.checked)}
+                  className="h-4 w-4"
+                />
+              </div>
+
+              {/* rfDiffusion Diffuser T */}
+              <div className="space-y-2">
+                <Label htmlFor="rfDiffusionDiffuserT" className="flex items-center gap-2">
+                  RFdiffusion Diffuser T
+                  <Tooltip>
+                    <TooltipTrigger>
+                      <Info className="w-4 h-4 text-muted-foreground" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="max-w-sm">
+                        Number of diffusion timesteps (T) used by RFdiffusion. Default is 50.
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </Label>
+                <Input
+                  id="rfDiffusionDiffuserT"
+                  type="number"
+                  min="1"
+                  value={rfDiffusionDiffuserT}
+                  onChange={(e) => setRfDiffusionDiffuserT(e.target.value)}
                   className="w-full"
                 />
               </div>
@@ -469,26 +447,26 @@ export default function App() {
 
           {/* Submit */}
           <Card
-            className={`border-2 ${isFormValid() ? "border-primary/30 bg-primary/5" : "border-dashed border-muted-foreground/20"}`}
+            className={`border-2 ${
+              isFormValid() ? "border-primary/30 bg-primary/5" : "border-dashed border-muted-foreground/20"
+            }`}
           >
             <CardContent className="p-8">
               <div className="text-center space-y-4">
                 <div
-                  className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center ${isFormValid() ? "bg-primary/20" : "bg-muted"}`}
+                  className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center ${
+                    isFormValid() ? "bg-primary/20" : "bg-muted"
+                  }`}
                 >
                   {isRunning ? (
                     <Loader2 className="w-8 h-8 text-primary animate-spin" />
                   ) : (
-                    <Play
-                      className={`w-8 h-8 ${isFormValid() ? "text-primary" : "text-muted-foreground"}`}
-                    />
+                    <Play className={`w-8 h-8 ${isFormValid() ? "text-primary" : "text-muted-foreground"}`} />
                   )}
                 </div>
                 <div>
                   <h3 className="mb-2">
-                    {isFormValid()
-                      ? "Ready to Run Job"
-                      : "Complete Configuration"}
+                    {isFormValid() ? "Ready to Run Job" : "Complete Configuration"}
                   </h3>
                   <p className="text-muted-foreground max-w-md mx-auto">
                     {isFormValid()
@@ -497,29 +475,17 @@ export default function App() {
                   </p>
                   {!isFormValid() && (
                     <div className="mt-3 text-sm space-y-1">
-                      <p className="text-destructive">
-                        Missing required fields:
-                      </p>
+                      <p className="text-destructive">Missing required fields:</p>
                       <ul className="text-muted-foreground space-y-1">
-                        {!frameworkFile && (
-                          <li>• Framework Structure</li>
-                        )}
-                        {!targetFile && (
-                          <li>• Target Structure</li>
-                        )}
-                        {getEffectiveHotspots().trim() ===
-                          "" && <li>• Hotspots</li>}
+                        {!frameworkFile && <li>• Framework Structure</li>}
+                        {!targetFile && <li>• Target Structure</li>}
+                        {getEffectiveHotspots().trim() === "" && <li>• Hotspots</li>}
                       </ul>
                     </div>
                   )}
                 </div>
                 <div className="pt-2">
-                  <Button
-                    size="lg"
-                    className="px-8"
-                    disabled={!isFormValid() || isRunning}
-                    onClick={handleRunJob}
-                  >
+                  <Button size="lg" className="px-8" disabled={!isFormValid() || isRunning} onClick={handleRunJob}>
                     {isRunning ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -544,26 +510,16 @@ export default function App() {
                 <CardTitle>Pipeline Result</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {error && (
-                  <div className="text-sm text-destructive">
-                    Error: {error}
-                  </div>
-                )}
+                {error && <div className="text-sm text-destructive">Error: {error}</div>}
                 {result && (
                   <>
                     {/* 간단 요약 */}
                     <div className="text-sm text-muted-foreground">
                       Status:{" "}
-                      <span className="font-medium text-foreground">
-                        {result.status}
-                      </span>
+                      <span className="font-medium text-foreground">{result.status}</span>
                       {result.job?.jobName ? (
                         <>
-                          {" "}
-                          · Job:{" "}
-                          <span className="font-mono">
-                            {result.job.jobName}
-                          </span>
+                          {" "}· Job: <span className="font-mono">{result.job.jobName}</span>
                         </>
                       ) : null}
                     </div>
@@ -574,21 +530,21 @@ export default function App() {
                     </pre>
 
                     {result.links?.download && (
-                    <div className="flex flex-wrap gap-2">
-                      {result.links.download.jobZip && (
-                        <a
-                          href={`${API_BASE}${result.links.download.jobZip}`}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          <Button variant="secondary" className="h-8">
-                            <Download className="w-4 h-4 mr-2" />
-                            Download Job ZIP
-                          </Button>
-                        </a>
-                      )}
-                    </div>
-                  )}
+                      <div className="flex flex-wrap gap-2">
+                        {result.links.download.jobZip && (
+                          <a
+                            href={`${API_BASE}${result.links.download.jobZip}`}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <Button variant="secondary" className="h-8">
+                              <Download className="w-4 h-4 mr-2" />
+                              Download Job ZIP
+                            </Button>
+                          </a>
+                        )}
+                      </div>
+                    )}
                   </>
                 )}
               </CardContent>
@@ -598,9 +554,7 @@ export default function App() {
           {/* Footer */}
           <div className="mt-12 flex justify-end">
             <div className="bg-background/80 backdrop-blur-sm px-3 py-2 rounded-lg border border-border/30 shadow-sm">
-              <span className="text-xs text-muted-foreground">
-                Developed by KandO
-              </span>
+              <span className="text-xs text-muted-foreground">Developed by KandO</span>
             </div>
           </div>
         </div>

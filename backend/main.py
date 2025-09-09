@@ -32,21 +32,25 @@ async def rfantibody_pipeline(
     mode: str = Form(...),
     hotspots: str = Form(...),
     rfDiffusionDesigns: int = Form(...),
-    proteinMPNNDesigns: int = Form(...),
     designLoops: str = Form(""),
+    rfDiffusionFinalStep: int = Form(48),
+    rfDiffusionDeterministic: bool = Form(False),
+    rfDiffusionDiffuserT: int = Form(50),
     frameworkFile: UploadFile = File(...),
     targetFile: UploadFile = File(...),
 ) -> Dict[str, Any]:
     fw = save_upload(frameworkFile)
     tg = save_upload(targetFile)
-    logger.info(f"[submit] jobName={jobName} mode={mode} RF={rfDiffusionDesigns} MPNN={proteinMPNNDesigns}")
+    
     try:
         result = orchestrate_pipeline(
             job_name=jobName,
             mode=mode,
             hotspots=hotspots,
             rf_diffusion_designs=rfDiffusionDesigns,
-            protein_mpnn_designs=proteinMPNNDesigns,
+            rf_diffusion_final_step=rfDiffusionFinalStep,
+            rf_diffusion_deterministic=rfDiffusionDeterministic,
+            rf_diffusion_diffuser_t=rfDiffusionDiffuserT,
             design_loops=designLoops,
             framework_path_host=fw,
             target_path_host=tg,
