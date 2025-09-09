@@ -41,7 +41,7 @@ async def rfantibody_pipeline(
 ) -> Dict[str, Any]:
     fw = save_upload(frameworkFile)
     tg = save_upload(targetFile)
-    logger.info(f"[submit] jobName={jobName} mode={mode} RF={rfDiffusionDesigns} MPNN={proteinMPNNDesigns}")
+    
     try:
         result = orchestrate_pipeline(
             job_name=jobName,
