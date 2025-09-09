@@ -30,12 +30,13 @@ from pipeline import orchestrate_pipeline
 async def rfantibody_pipeline(
     jobName: str = Form(...),
     mode: str = Form(...),
-    hotspots: str = Form(...),
+    hotspots: str | None = Form(None),
     rfDiffusionDesigns: int = Form(...),
     designLoops: str = Form(""),
     rfDiffusionFinalStep: int = Form(48),
     rfDiffusionDeterministic: bool = Form(False),
     rfDiffusionDiffuserT: int = Form(50),
+    proteinMPNNDesigns: int = Form(1),
     frameworkFile: UploadFile = File(...),
     targetFile: UploadFile = File(...),
 ) -> Dict[str, Any]:
@@ -52,6 +53,7 @@ async def rfantibody_pipeline(
             rf_diffusion_deterministic=rfDiffusionDeterministic,
             rf_diffusion_diffuser_t=rfDiffusionDiffuserT,
             design_loops=designLoops,
+            protein_mpnn_designs=proteinMPNNDesigns,
             framework_path_host=fw,
             target_path_host=tg,
         )

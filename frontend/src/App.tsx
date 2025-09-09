@@ -31,25 +31,31 @@ export default function App() {
   const [mode, setMode] = useState("Antibody");
   const [frameworkFile, setFrameworkFile] = useState<File | null>(null);
   const [targetFile, setTargetFile] = useState<File | null>(null);
+
+  // Hotspots optional (default: none)
   const [hotspots, setHotspots] = useState("");
   const [hotspotsIsPlaceholder, setHotspotsIsPlaceholder] = useState(true);
+
   const [rfDiffusionDesigns, setRfDiffusionDesigns] = useState("1");
   const [designLoops, setDesignLoops] = useState("");
   const [designLoopsIsPlaceholder, setDesignLoopsIsPlaceholder] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
 
-  // NEW: API 결과/에러 상태
+  // API 결과/에러 상태
   const [result, setResult] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // NEW: 추가된 RFdiffusion 세부 파라미터 (누락됐던 state + setter)
+  // RFdiffusion 세부 파라미터
   const [rfDiffusionFinalStep, setRfDiffusionFinalStep] = useState("48");
   const [rfDiffusionDeterministic, setRfDiffusionDeterministic] = useState(false);
   const [rfDiffusionDiffuserT, setRfDiffusionDiffuserT] = useState("50");
 
-  // Default placeholders
-  const defaultHotspots = "T305,T456";
-  const defaultDesignLoops = "L1:8-13,L2:7,L3:9-11,H1:7,H2:6,H3:5-13";
+  // NEW: Num MPNN Sequence 파라미터
+  const [proteinMPNNDesigns, setProteinMPNNDesigns] = useState("1");
+
+  // Placeholders
+  const defaultHotspots = ""; // none by default
+  const defaultDesignLoops = "H1:7,H2:6,H3:5-13";
 
   const generateDefaultJobName = () => {
     const now = new Date();
@@ -58,21 +64,21 @@ export default function App() {
   };
 
   const getEffectiveJobName = () => jobName.trim() || generateDefaultJobName();
-  const getEffectiveHotspots = () => (hotspotsIsPlaceholder ? defaultHotspots : hotspots);
+  const getEffectiveHotspots = () =>
+    hotspotsIsPlaceholder ? defaultHotspots : hotspots;
   const getEffectiveDesignLoops = () =>
     designLoopsIsPlaceholder ? defaultDesignLoops : designLoops;
 
   const isFormValid = () => {
-    const effectiveHotspots = getEffectiveHotspots();
+    // Hotspots are OPTIONAL
     return (
       frameworkFile !== null &&
       targetFile !== null &&
-      effectiveHotspots.trim() !== "" &&
       parseInt(rfDiffusionDesigns) > 0
     );
   };
 
-  // NEW: API 베이스 (Vite 프록시 기본 /api)
+  // API 베이스 (Vite 프록시 기본 /api)
   const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
 
   const handleRunJob = async () => {
@@ -87,23 +93,30 @@ export default function App() {
       const fd = new FormData();
       fd.append("jobName", effectiveJobName);
       fd.append("mode", mode);
-      fd.append("hotspots", getEffectiveHotspots());
+
+      // Hotspots: omit when empty to represent "null/none"
+      const effHotspots = getEffectiveHotspots().trim();
+      fd.append("hotspots", effHotspots);
+
       fd.append("rfDiffusionDesigns", String(parseInt(rfDiffusionDesigns)));
       fd.append("designLoops", getEffectiveDesignLoops());
 
-      // NEW: 추가된 RFdiffusion 세부 파라미터를 FormData에 포함
+      // RFdiffusion 세부 파라미터
       fd.append("rfDiffusionFinalStep", String(parseInt(rfDiffusionFinalStep)));
       fd.append("rfDiffusionDeterministic", String(rfDiffusionDeterministic));
       fd.append("rfDiffusionDiffuserT", String(parseInt(rfDiffusionDiffuserT)));
 
+      // NEW: Num MPNN Sequence
+      fd.append("proteinMPNNDesigns", String(parseInt(proteinMPNNDesigns)));
+
       if (frameworkFile)
         fd.append("frameworkFile", frameworkFile, frameworkFile.name);
-      if (targetFile) fd.append("targetFile", targetFile, targetFile.name);
+      if (targetFile)
+        fd.append("targetFile", targetFile, targetFile.name);
 
       const resp = await fetch(`${API_BASE}/rfantibody_pipeline`, {
         method: "POST",
         body: fd,
-        // Content-Type는 FormData가 자동 설정 (수동 설정 금지)
       });
 
       if (!resp.ok) {
@@ -132,7 +145,7 @@ export default function App() {
           <div className="mb-8 relative">
             <div className="absolute top-0 right-0">
               <Badge variant="secondary" className="text-xs">
-                v1.2.8
+                v1.0.9
               </Badge>
             </div>
             <div className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
@@ -252,28 +265,27 @@ export default function App() {
                 />
               </div>
 
-              {/* Hotspots */}
+              {/* Hotspots (Optional) */}
               <div className="space-y-2">
                 <Label htmlFor="hotspots" className="flex items-center gap-2">
-                  Hotspots
+                  Hotspots <span className="text-xs text-muted-foreground">(optional)</span>
                   <Tooltip>
                     <TooltipTrigger>
                       <Info className="w-4 h-4 text-muted-foreground" />
                     </TooltipTrigger>
                     <TooltipContent>
                       <p className="max-w-sm">
-                        Specify key residues on the target protein to guide binding.
+                        Optional key residues on the target protein to guide binding.
                         Provide a comma-separated list. Each item can be a single
-                        residue (e.g., 'A21') or a range (e.g., 'B14-21'). Uses
-                        1-based numbering. Designs focusing on hydrophobic residues
-                        work best.
+                        residue (e.g., 'A21') or a range (e.g., 'B14-21').
+                        Leave empty to design without explicit hotspots. Default is none.
                       </p>
                     </TooltipContent>
                   </Tooltip>
                 </Label>
                 <Input
                   id="hotspots"
-                  placeholder="e.g., T305,T456"
+                  placeholder=""
                   autoComplete="off"
                   value={hotspotsIsPlaceholder ? defaultHotspots : hotspots}
                   onFocus={() => {
@@ -307,14 +319,14 @@ export default function App() {
                         and optionally constrain their lengths. Each item follows the
                         format: 'LOOP', 'LOOP:LENGTH' or 'LOOP:START-END'. Examples:
                         'H1', 'L2:7', 'H3:5-13'. If omitted, loops remain fixed from
-                        the input framework.
+                        the input framework. Default is H1:7,H2:6,H3:5-13.
                       </p>
                     </TooltipContent>
                   </Tooltip>
                 </Label>
                 <Input
                   id="designLoops"
-                  placeholder="e.g., L1:8-13,L2:7,L3:9-11,H1:7,H2:6,H3:5-13"
+                  placeholder=""
                   autoComplete="off"
                   value={designLoopsIsPlaceholder ? defaultDesignLoops : designLoops}
                   onFocus={() => {
@@ -442,13 +454,41 @@ export default function App() {
                   className="w-full"
                 />
               </div>
+
+              {/* NEW: Num MPNN Sequence */}
+              <div className="space-y-2">
+                <Label htmlFor="proteinMPNNDesigns" className="flex items-center gap-2">
+                  Num MPNN Sequence
+                  <Tooltip>
+                    <TooltipTrigger>
+                      <Info className="w-4 h-4 text-muted-foreground" />
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p className="max-w-sm">
+                        Number of sequences to sample with ProteinMPNN for each backbone.
+                        Set higher for more sequence diversity. Minimum 1.
+                      </p>
+                    </TooltipContent>
+                  </Tooltip>
+                </Label>
+                <Input
+                  id="proteinMPNNDesigns"
+                  type="number"
+                  min="1"
+                  value={proteinMPNNDesigns}
+                  onChange={(e) => setProteinMPNNDesigns(e.target.value)}
+                  className="w-full"
+                />
+              </div>
             </CardContent>
           </Card>
 
           {/* Submit */}
           <Card
             className={`border-2 ${
-              isFormValid() ? "border-primary/30 bg-primary/5" : "border-dashed border-muted-foreground/20"
+              isFormValid()
+                ? "border-primary/30 bg-primary/5"
+                : "border-dashed border-muted-foreground/20"
             }`}
           >
             <CardContent className="p-8">
@@ -461,7 +501,11 @@ export default function App() {
                   {isRunning ? (
                     <Loader2 className="w-8 h-8 text-primary animate-spin" />
                   ) : (
-                    <Play className={`w-8 h-8 ${isFormValid() ? "text-primary" : "text-muted-foreground"}`} />
+                    <Play
+                      className={`w-8 h-8 ${
+                        isFormValid() ? "text-primary" : "text-muted-foreground"
+                      }`}
+                    />
                   )}
                 </div>
                 <div>
@@ -479,13 +523,17 @@ export default function App() {
                       <ul className="text-muted-foreground space-y-1">
                         {!frameworkFile && <li>• Framework Structure</li>}
                         {!targetFile && <li>• Target Structure</li>}
-                        {getEffectiveHotspots().trim() === "" && <li>• Hotspots</li>}
                       </ul>
                     </div>
                   )}
                 </div>
                 <div className="pt-2">
-                  <Button size="lg" className="px-8" disabled={!isFormValid() || isRunning} onClick={handleRunJob}>
+                  <Button
+                    size="lg"
+                    className="px-8"
+                    disabled={!isFormValid() || isRunning}
+                    onClick={handleRunJob}
+                  >
                     {isRunning ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -516,10 +564,13 @@ export default function App() {
                     {/* 간단 요약 */}
                     <div className="text-sm text-muted-foreground">
                       Status:{" "}
-                      <span className="font-medium text-foreground">{result.status}</span>
+                      <span className="font-medium text-foreground">
+                        {result.status}
+                      </span>
                       {result.job?.jobName ? (
                         <>
-                          {" "}· Job: <span className="font-mono">{result.job.jobName}</span>
+                          {" "}· Job:{" "}
+                          <span className="font-mono">{result.job.jobName}</span>
                         </>
                       ) : null}
                     </div>
