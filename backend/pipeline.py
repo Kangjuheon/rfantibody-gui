@@ -84,10 +84,7 @@ def _stream_exec_logs(client: docker.DockerClient, container, exec_id: str, job_
         return ""
 
 def exec_in_worker(cmd: str, job_dir: Path, job_id: str, stage: str) -> Tuple[int, str]:
-    """
-    이미 실행 중인 rfantibody-worker 컨테이너 내부에서 bash -lc '{cmd}' 를 실행하고
-    로그를 {JOBS_ROOT}/{job_id}/logs/{stage}.log 로 기록한다.
-    """
+    
     client = docker.from_env()
     try:
         container = client.containers.get(RF_WORKER_NAME)
@@ -182,10 +179,9 @@ def orchestrate_pipeline(
         }
 
     
-    rfd_pack_cmd = "mkdir -p {od}/rfdiffusion && mv {od}/ab_des* {od}/rfdiffusion/ 2>/dev/null || true".format(od=out_dir)
+    rfd_pack_cmd = "mkdir -p {od}/rfdiffusion && mv {od}/traj {od}/ab_des* {od}/rfdiffusion/ 2>/dev/null || true".format(od=out_dir)
     exec_in_worker(rfd_pack_cmd, job_dir, job_id, stage="collect_rfdiffusion")
 
-    
     mpnn_in = out_dir / "rfdiffusion"   
     mpnn_out = out_dir / "proteinmpnn"
     ensure_dirs(mpnn_out)

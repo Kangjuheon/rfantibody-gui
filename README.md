@@ -31,13 +31,12 @@ cd rfantibody-ui
 ```bash
 cd third_party/RFantibody
 bash include/download_weights.sh
-cd ../..
-docker compose --profile builder build rfantibody
 ```
 
 3. Launch Docker containers
 ```bash
-docker compose up -d --build
+cd ../..
+docker compose up -d
 ```
 
 ## 🌐 Access
