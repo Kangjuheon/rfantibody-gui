@@ -19,12 +19,12 @@ A user-friendly graphical interface for RFantibody. This web-based GUI makes it 
 
 1. Clone the repository
 ```bash
-git clone https://github.com/Kangjuheon/rfantibody-ui.git
+git clone https://github.com/Kangjuheon/rfantibody-gui.git
 ```
 
 2. Navigate to project directory
 ```bash
-cd rfantibody-ui
+cd rfantibody-gui
 ```
 
 3. Prepare RFAntibody
