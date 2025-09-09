@@ -573,30 +573,22 @@ export default function App() {
                       {JSON.stringify(result, null, 2)}
                     </pre>
 
-                    {/* 아티팩트가 URL 리스트로 온 경우 다운로드 버튼 예시 */}
-                    {Array.isArray(result.artifacts) &&
-                      result.artifacts.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                          {result.artifacts.map(
-                            (url: string, i: number) => (
-                              <a
-                                key={i}
-                                href={url}
-                                target="_blank"
-                                rel="noreferrer"
-                              >
-                                <Button
-                                  variant="secondary"
-                                  className="h-8"
-                                >
-                                  <Download className="w-4 h-4 mr-2" />
-                                  Download {i + 1}
-                                </Button>
-                              </a>
-                            ),
-                          )}
-                        </div>
+                    {result.links?.download && (
+                    <div className="flex flex-wrap gap-2">
+                      {result.links.download.jobZip && (
+                        <a
+                          href={`${API_BASE}${result.links.download.jobZip}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <Button variant="secondary" className="h-8">
+                            <Download className="w-4 h-4 mr-2" />
+                            Download Job ZIP
+                          </Button>
+                        </a>
                       )}
+                    </div>
+                  )}
                   </>
                 )}
               </CardContent>

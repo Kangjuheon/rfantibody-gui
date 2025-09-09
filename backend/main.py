@@ -1,3 +1,6 @@
+from starlette.background import BackgroundTask
+import zipfile
+from typing import Optional
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from typing import Dict, Any
 from pathlib import Path
@@ -48,6 +51,14 @@ async def rfantibody_pipeline(
             framework_path_host=fw,
             target_path_host=tg,
         )
+        job_id = result.get("jobId") or (result.get("job") or {}).get("jobId")
+        if job_id:
+            
+            result.setdefault("links", {})
+            result["links"]["download"] = {
+                "jobZip":   f"/jobs/{job_id}/archive?scope=job",
+                "outputZip":f"/jobs/{job_id}/archive?scope=output",
+            }
         
         if result.get("status") == "error":
             stage = result.get("stage")
@@ -75,25 +86,33 @@ def safe_job_dir(job_id: str) -> Path:
     return p
 
 @app.get("/jobs/{job_id}/archive")
-def download_job_archive(job_id: str):
+def download_job_archive(job_id: str, scope: Optional[str] = "job"):
     job_dir = safe_job_dir(job_id)
-    out_dir = job_dir / "output"
-    if not out_dir.exists():
-        raise HTTPException(status_code=404, detail="output not found")
-    
+    base_dir = job_dir if scope == "job" else (job_dir / "output")
+
+    if not base_dir.exists():
+        raise HTTPException(status_code=404, detail=f"{scope} not found")
+
     try:
-        next(out_dir.rglob("*"))
+        next(base_dir.rglob("*"))
     except StopIteration:
-        raise HTTPException(status_code=404, detail="no artifacts")
+        raise HTTPException(status_code=404, detail=f"no artifacts in {scope}")
 
     tmpdir = tempfile.mkdtemp()
-    zip_path = Path(tmpdir) / f"{job_id}_output.zip"
-    
-    shutil.make_archive(zip_path.with_suffix(""), "zip", root_dir=out_dir)
-    logger.info(f"[download] jobId={job_id} -> zip ready")
+    zip_path = Path(tmpdir) / f"{job_id}_{scope}.zip"
+
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for p in base_dir.rglob("*"):
+            if p.is_file():
+                zf.write(p, p.relative_to(job_dir))
+
+    logger.info(f"[download] jobId={job_id} scope={scope} -> zip ready")
+
+    bg = BackgroundTask(shutil.rmtree, tmpdir)
     return FileResponse(
         path=str(zip_path),
         media_type="application/zip",
-        filename=f"{job_id}_output.zip",
-        headers={"Cache-Control": "no-store"}
+        filename=f"{job_id}_{scope}.zip",
+        headers={"Cache-Control": "no-store"},
+        background=bg,
     )
