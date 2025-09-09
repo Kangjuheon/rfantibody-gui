@@ -187,10 +187,11 @@ def orchestrate_pipeline(
     ensure_dirs(mpnn_out)
 
     cmd2 = " ".join([
-        "poetry run python /home/scripts/proteinmpnn_interface_design.py",
+        "poetry run python /home/src/rfantibody/proteinmpnn/proteinmpnn_interface_design.py",
         f"-pdbdir {mpnn_in}",
         f"-outpdbdir {mpnn_out}",
     ])
+
     code2, log2_tail = exec_in_worker(cmd2, job_dir, job_id, stage="proteinmpnn")
     if code2 != 0 or not list(mpnn_out.glob("*.pdb")):
         return {
@@ -199,19 +200,19 @@ def orchestrate_pipeline(
             "jobId": job_id,
             "log_tail": (log2_tail or "")[-4000:],
         }
-
     
     rf2_inp = mpnn_out
     rf2_out = out_dir / "rf2"
     ensure_dirs(rf2_out)
 
     cmd3 = " ".join([
-        "poetry run python /home/scripts/rf2_predict.py",
+        "poetry run python /home/src/rfantibody/rf2/rf2_predict.py",
         f"input.pdb_dir={rf2_inp}",
         f"output.pdb_dir={rf2_out}",
+        "model.model_weights=/home/weights/RF2_ab.pt",
     ])
     code3, log3_tail = exec_in_worker(cmd3, job_dir, job_id, stage="rf2")
-    if code3 != 0:
+    if code3 != 0 or not list(rf2_out.glob("*.pdb")):
         return {
             "status": "error",
             "stage": "rf2",
