@@ -183,17 +183,16 @@ def orchestrate_pipeline(
     exec_in_worker(rfd_pack_cmd, job_dir, job_id, stage="collect_rfdiffusion")
 
     mpnn_in = out_dir / "rfdiffusion"   
-    mpnn_out = out_dir / "proteinmpnn"
+    mpnn_out = out_dir / "mpnn"
     ensure_dirs(mpnn_out)
 
     cmd2 = " ".join([
         "poetry run python /home/scripts/proteinmpnn_interface_design.py",
         f"-pdbdir {mpnn_in}",
         f"-outpdbdir {mpnn_out}",
-        f"-numseq {protein_mpnn_designs}",
     ])
     code2, log2_tail = exec_in_worker(cmd2, job_dir, job_id, stage="proteinmpnn")
-    if code2 != 0:
+    if code2 != 0 or not list(mpnn_out.glob("*.pdb")):
         return {
             "status": "error",
             "stage": "proteinmpnn",
