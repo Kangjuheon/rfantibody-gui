@@ -7,15 +7,11 @@ RUN apt-get update && apt-get install -y software-properties-common && \
 
 RUN alias "python"="python3.10"
 
-# Make a virtual env that we can safely install into
-
 RUN python3 -m venv /opt/venv
-# Enable venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 RUN pip install poetry
 
-# Set the working directory to the user's home directory
 WORKDIR /home
 
 CMD ["/bin/bash"]

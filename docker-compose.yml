@@ -47,7 +47,7 @@ services:
     image: rfantibody:latest
     container_name: rfantibody-worker
     environment:
-      - SENTINEL=/home/.rf_setup_done     # <= 추가
+      - SENTINEL=/home/.rf_setup_done
       - HYDRA_FULL_ERROR=1
       - PYTHONUNBUFFERED=1
     volumes:
@@ -65,7 +65,6 @@ services:
         ls -al /home/include || true
         if [[ ! -f "${SENTINEL}" ]]; then
           echo "[compose] running setup..."
-          # SENTINEL을 명시적으로 전달 (중요)
           env SENTINEL="${SENTINEL}" bash /home/include/setup.sh
           echo "[compose] setup done."
         else
