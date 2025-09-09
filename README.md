@@ -39,6 +39,12 @@ cd ../..
 docker compose up -d
 ```
 
+4. Waiting for intalling RFAntibody
+It may takes over 120s.
+```bash
+docker logs -f rfantibody-worker
+```
+
 ## 🌐 Access
 Open your browser and visit:
 ```
