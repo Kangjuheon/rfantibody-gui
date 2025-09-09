@@ -1,7 +1,6 @@
 version: "3.9"
 
 services:
-  
   backend:
     build:
       context: ./backend
@@ -13,7 +12,7 @@ services:
       - ALLOW_ORIGINS=http://localhost:2239
       - JOBS_ROOT=/data/jobs
       - RFANTIBODY_IMAGE=rfantibody:latest
-      - RF_WEIGHTS_HOST=./third_party/RFantibody/weights
+      - RF_WEIGHTS_HOST=${PWD}/third_party/RFantibody/weights
       - HOST_DATA_DIR=${PWD}/data
       - HOST_WEIGHTS_DIR=${PWD}/third_party/RFantibody/weights
       - HOST_CODE_DIR=${PWD}/third_party/RFantibody
@@ -41,9 +40,41 @@ services:
     depends_on:
       - backend
 
-  rfantibody:
+  rfantibody-worker:
     build:
       context: ./third_party/RFantibody
       dockerfile: Dockerfile
     image: rfantibody:latest
-    profiles: ["builder"]
+    container_name: rfantibody-worker
+    environment:
+      - SENTINEL=/home/.rf_setup_done     # <= 추가
+      - HYDRA_FULL_ERROR=1
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./data:/data
+      - ./third_party/RFantibody:/home
+      - ./third_party/RFantibody/weights:/home/weights:ro
+    tty: true
+    stdin_open: true
+    command:
+      - /bin/bash
+      - -lc
+      - |
+        set -Eeuo pipefail
+        nvidia-smi || true
+        ls -al /home/include || true
+        if [[ ! -f "${SENTINEL}" ]]; then
+          echo "[compose] running setup..."
+          # SENTINEL을 명시적으로 전달 (중요)
+          env SENTINEL="${SENTINEL}" bash /home/include/setup.sh
+          echo "[compose] setup done."
+        else
+          echo "[compose] setup already done."
+        fi
+        echo "[compose] worker ready; sleeping..."
+        sleep infinity
+    healthcheck:
+      test: ["CMD-SHELL", "[ -f /home/.rf_setup_done ]"]
+      interval: 30s
+      timeout: 5s
+      retries: 10

@@ -1,15 +1,16 @@
-import os, shutil, uuid, json, re, time
+
+import os, shutil, uuid, json, re
 from pathlib import Path
 from typing import Dict, Any, List, Tuple
 import docker
-from docker.types import DeviceRequest
 from loguru import logger
 
-JOBS_ROOT = Path(os.getenv("JOBS_ROOT", "/data/jobs"))
-RF_IMAGE   = os.getenv("RFANTIBODY_IMAGE", "rfantibody:latest")
-RF_WEIGHTS_HOST = os.getenv("RF_WEIGHTS_HOST", "./third_party/RFantibody/weights")
 
-GPU_REQ = [DeviceRequest(count=-1, capabilities=[["gpu"]])]
+JOBS_ROOT = Path(os.getenv("JOBS_ROOT", "/data/jobs"))
+
+
+RF_WORKER_NAME = os.getenv("RF_WORKER_NAME", "rfantibody-worker")
+
 
 SETUP_SENTINEL = "/home/.rf_setup_done"
 
@@ -28,148 +29,97 @@ def parse_design_loops(user_str: str) -> str:
     return "[" + ",".join(valid) + "]" if valid else ""
 
 def parse_hotspots(user_str: str) -> str:
+    
     s = user_str.strip()
     if not s:
         return "[]"
     toks = [re.sub(r"\s+", "", t) for t in s.split(",") if t.strip()]
     expanded: List[str] = []
     for t in toks:
-        m = re.match(r"^T(\d+)-T?(\d+)$", t, re.IGNORECASE)
+        m = re.match(r"^([A-Za-z])(\d+)-([A-Za-z])?(\d+)$", t)
         if m:
-            a, b = int(m.group(1)), int(m.group(2))
+            ch1, a, ch2, b = m.group(1), int(m.group(2)), m.group(3) or m.group(1), int(m.group(4))
+            if ch1.upper() != ch2.upper():
+                
+                continue
             lo, hi = (a, b) if a <= b else (b, a)
-            expanded += [f"T{idx}" for idx in range(lo, hi+1)]
+            expanded += [f"{ch1.upper()}{idx}" for idx in range(lo, hi + 1)]
         else:
-            if re.match(r"^T\d+$", t, re.IGNORECASE):
-                expanded.append("T" + re.findall(r"\d+", t)[0])
+            m2 = re.match(r"^([A-Za-z])(\d+)$", t)
+            if m2:
+                expanded.append(f"{m2.group(1).upper()}{m2.group(2)}")
+    
     return "[" + ",".join(expanded) + "]" if expanded else "[]"
 
-def with_setup(cmd: str) -> str:
-    return f"""set -Eeuo pipefail
-export HYDRA_FULL_ERROR=1
-export PYTHONUNBUFFERED=1
-nvidia-smi || true
-ls -al /home/include || true
-ls -al /home/src/rfantibody/rfdiffusion || true
-if [ ! -f {SETUP_SENTINEL} ]; then
-  echo "[RFantibody setup] running include/setup.sh ..."
-  bash /home/include/setup.sh && touch {SETUP_SENTINEL}
-fi
-python -V || true; which poetry || true
-{cmd}
-""".strip()
 
-def _stream_container_logs(container, job_id: str, stage: str, logfile: Path, tail_limit: int = 10000) -> str:
-    """
-    컨테이너 로그를 실시간으로 Loguru 및 파일로 전달.
-    반환값: tail 문자열(최대 tail_limit 바이트)
-    """
+def _stream_exec_logs(client: docker.DockerClient, container, exec_id: str, job_id: str, stage: str, logfile: Path, tail_limit: int = 10000) -> str:
     ensure_dirs(logfile.parent)
     tail_buf: List[bytes] = []
     max_bytes = tail_limit
 
-    with logfile.open("ab") as f:
-        try:
-            for chunk in container.logs(stream=True, follow=True, stdout=True, stderr=True):
-                if not chunk:
-                    continue
-                
-                f.write(chunk)
-                f.flush()
-                
-                try:
-                    text = chunk.decode("utf-8", "ignore").rstrip("\n")
-                except Exception:
-                    text = str(chunk)
-                if text:
-                    logger.info(f"[job={job_id}] [{stage}] {text}")
-
-                
-                tail_buf.append(chunk)
-                
-                while sum(len(x) for x in tail_buf) > max_bytes and len(tail_buf) > 1:
-                    tail_buf.pop(0)
-        except Exception as e:
-            logger.warning(f"[job={job_id}] [{stage}] log stream error: {e}")
-
-    try:
-        
-        extra = container.logs(stdout=True, stderr=True)
-        if extra:
-            with logfile.open("ab") as f:
-                f.write(extra)
-            try:
-                text = extra.decode("utf-8", "ignore").rstrip("\n")
-            except Exception:
-                text = str(extra)
-            if text:
-                logger.info(f"[job={job_id}] [{stage}] {text}")
-            tail_buf.append(extra)
-            while sum(len(x) for x in tail_buf) > max_bytes and len(tail_buf) > 1:
-                tail_buf.pop(0)
-    except Exception:
-        pass
-
     
+    for chunk in client.api.exec_start(exec_id, stream=True, demux=True):
+        
+        out = (chunk[0] or b"") + (chunk[1] or b"")
+        if not out:
+            continue
+        
+        with logfile.open("ab") as f:
+            f.write(out)
+        
+        try:
+            text = out.decode("utf-8", "ignore").rstrip("\n")
+        except Exception:
+            text = str(out)
+        if text:
+            logger.info(f"[job={job_id}] [{stage}] {text}")
+
+        tail_buf.append(out)
+        while sum(len(x) for x in tail_buf) > max_bytes and len(tail_buf) > 1:
+            tail_buf.pop(0)
+
     try:
         return b"".join(tail_buf).decode("utf-8", "ignore")
     except Exception:
         return ""
 
-HOST_DATA_DIR = os.getenv("HOST_DATA_DIR")            
-HOST_WEIGHTS_DIR = os.getenv("HOST_WEIGHTS_DIR")      
-HOST_CODE_DIR = os.getenv("HOST_CODE_DIR")            
-if not HOST_CODE_DIR:
-    raise RuntimeError("HOST_CODE_DIR is not set. Set it to your third_party/RFantibody absolute path.")
-
-def run_in_container(cmd: str, job_dir: Path, job_id: str, stage: str, mem: str = "10g") -> Tuple[int, str]:
-    client = docker.from_env()    
-    job_dir_host = Path(HOST_DATA_DIR).joinpath("jobs", *job_dir.parts[job_dir.parts.index("jobs")+1:])
-    
-    volumes = {
-        str(job_dir_host):        {"bind": "/home/job",     "mode": "rw"},
-        str(Path(HOST_WEIGHTS_DIR)): {"bind": "/home/weights", "mode": "ro"},
-        str(Path(HOST_CODE_DIR)): {"bind": "/home",         "mode": "rw"},
-    }
+def exec_in_worker(cmd: str, job_dir: Path, job_id: str, stage: str) -> Tuple[int, str]:
+    """
+    이미 실행 중인 rfantibody-worker 컨테이너 내부에서 bash -lc '{cmd}' 를 실행하고
+    로그를 {JOBS_ROOT}/{job_id}/logs/{stage}.log 로 기록한다.
+    """
+    client = docker.from_env()
+    try:
+        container = client.containers.get(RF_WORKER_NAME)
+    except Exception as e:
+        raise RuntimeError(f"worker container '{RF_WORKER_NAME}' not found or not running: {e}")
 
     logs_dir = job_dir / "logs"
     ensure_dirs(logs_dir)
     logfile = logs_dir / f"{stage}.log"
 
-    logger.info(f"[job={job_id}] [{stage}] starting container")
+    full_cmd = ["/bin/bash", "-lc", cmd]
+    logger.info(f"[job={job_id}] [{stage}] exec in {RF_WORKER_NAME}: {cmd}")
 
-    name = f"rfjob-{job_id}-{stage}"
-    logger.info(f"[job={job_id}] [{stage}] starting container (name={name})")
-    container = client.containers.run(
-        image=RF_IMAGE,
-        entrypoint=["/bin/bash","-lc"],
-        command=[cmd],
-        volumes=volumes,
-        device_requests=GPU_REQ,
-        mem_limit=mem,
-        working_dir="/home",
-        detach=True,
-        tty=False,
+    
+    exec_obj = client.api.exec_create(
+        container.id,
+        cmd=full_cmd,
         stdout=True,
         stderr=True,
-        name=name,
-        auto_remove=False
+        tty=False,
+        environment={},  
+        workdir="/home", 
     )
-
+    exec_id = exec_obj.get("Id")
     
-    tail_text = _stream_container_logs(container, job_id, stage, logfile)
-
+    tail_text = _stream_exec_logs(client, container, exec_id, job_id, stage, logfile)
     
-    result = container.wait()
-    exit_code = int(result.get("StatusCode", 1))
-    logger.info(f"[job={job_id}] [{stage}] container exited with code {exit_code}")
+    inspect = client.api.exec_inspect(exec_id)
+    exit_code = int(inspect.get("ExitCode", 1))
+    logger.info(f"[job={job_id}] [{stage}] exec exit code {exit_code}")
+    return exit_code, tail_text
 
-    if exit_code == 0:
-        try:
-            container.remove(force=True)
-        except Exception:
-            pass
-    return exit_code, tail_text, name
 
 def orchestrate_pipeline(
     job_name: str,
@@ -182,6 +132,7 @@ def orchestrate_pipeline(
     target_path_host: Path,
 ) -> Dict[str, Any]:
 
+    
     job_id = f"{job_name}_{uuid.uuid4().hex[:8]}"
     job_dir = JOBS_ROOT / job_id
     inp_dir = job_dir / "input"
@@ -198,78 +149,96 @@ def orchestrate_pipeline(
     hotspots_arg = parse_hotspots(hotspots)
 
     
+    
     rfd_out_prefix = out_dir / "ab_des"
-    rfd_cmd = [
+    ensure_dirs(rfd_out_prefix)  
+    logger.info(f"[job={job_id}] RFdiffusion output prefix: {rfd_out_prefix}")
+
+    rfd_cmd_parts = [
         "poetry run python /home/src/rfantibody/rfdiffusion/rfdiffusion_inference.py",
         "--config-name antibody",
-        f"antibody.target_pdb=/home/job/input/{tg_host.name}",
-        f"antibody.framework_pdb=/home/job/input/{fw_host.name}",
+        f"antibody.target_pdb={tg_host}",
+        f"antibody.framework_pdb={fw_host}",
         "inference.ckpt_override_path=/home/weights/RFdiffusion_Ab.pt",
         f"ppi.hotspot_res={hotspots_arg}",
+        f"inference.num_designs={rf_diffusion_designs}",
+        f"inference.output_prefix={rfd_out_prefix}",
     ]
     if loops_arg:
-        rfd_cmd.append(f"antibody.design_loops={loops_arg}")
-    rfd_cmd += [
-        f"inference.num_designs={rf_diffusion_designs}",
-        f"inference.output_prefix={rfd_out_prefix}"
-    ]
-    cmd1 = with_setup(" ".join(rfd_cmd))
-    code1, log1_tail, cont1 = run_in_container(cmd1, job_dir, job_id, stage="rfdiffusion")
+        rfd_cmd_parts.append(f"antibody.design_loops={loops_arg}")
+
+    cmd1 = " ".join(map(str, rfd_cmd_parts))
+    code1, log1_tail = exec_in_worker(cmd1, job_dir, job_id, stage="rfdiffusion")
+
     
     rfd_files = list(out_dir.glob("ab_des*"))
     if code1 != 0 or not rfd_files:
-        return {"status":"error","stage":"rfdiffusion","jobId": job_id,
-            "container": cont1, "log_tail": log1_tail or "[no logs]",
-            "note": f"expected outputs missing (found {len(rfd_files)})"}
-    
-    collect_cmd = "mkdir -p /home/job/output/rfdiffusion && mv /home/job/output/ab_des* /home/job/output/rfdiffusion/ 2>/dev/null || true"
-    run_in_container(with_setup(collect_cmd), job_dir, job_id, stage="collect_rfdiffusion")
+        return {
+            "status": "error",
+            "stage": "rfdiffusion",
+            "jobId": job_id,
+            "log_tail": (log1_tail or "")[-4000:],
+            "note": f"expected outputs missing (found {len(rfd_files)})"
+        }
 
     
-    mpnn_in = "/home/job/output/rfdiffusion"
-    mpnn_out = "/home/job/output/proteinmpnn"
+    rfd_pack_cmd = "mkdir -p {od}/rfdiffusion && mv {od}/ab_des* {od}/rfdiffusion/ 2>/dev/null || true".format(od=out_dir)
+    exec_in_worker(rfd_pack_cmd, job_dir, job_id, stage="collect_rfdiffusion")
+
+    
+    mpnn_in = out_dir / "rfdiffusion"   
+    mpnn_out = out_dir / "proteinmpnn"
+    ensure_dirs(mpnn_out)
+
     cmd2 = " ".join([
         "poetry run python /home/scripts/proteinmpnn_interface_design.py",
         f"-pdbdir {mpnn_in}",
         f"-outpdbdir {mpnn_out}",
         f"-numseq {protein_mpnn_designs}",
     ])
-    cmd2 = with_setup(cmd2)
-    code2, log2_tail, cont2 = run_in_container(cmd2, job_dir, job_id, stage="proteinmpnn")
+    code2, log2_tail = exec_in_worker(cmd2, job_dir, job_id, stage="proteinmpnn")
     if code2 != 0:
-        return {"status":"error","stage":"proteinmpnn","jobId": job_id, "log_tail": log2_tail}
+        return {
+            "status": "error",
+            "stage": "proteinmpnn",
+            "jobId": job_id,
+            "log_tail": (log2_tail or "")[-4000:],
+        }
 
     
     rf2_inp = mpnn_out
-    rf2_out = "/home/job/output/rf2"
+    rf2_out = out_dir / "rf2"
+    ensure_dirs(rf2_out)
+
     cmd3 = " ".join([
         "poetry run python /home/scripts/rf2_predict.py",
         f"input.pdb_dir={rf2_inp}",
-        f"output.pdb_dir={rf2_out}"
+        f"output.pdb_dir={rf2_out}",
     ])
-    cmd3 = with_setup(cmd3)
-    code3, log3_tail, cont3 = run_in_container(cmd3, job_dir, job_id, stage="rf2")
+    code3, log3_tail = exec_in_worker(cmd3, job_dir, job_id, stage="rf2")
     if code3 != 0:
-        return {"status":"error","stage":"rf2","jobId": job_id, "log_tail": log3_tail}
+        return {
+            "status": "error",
+            "stage": "rf2",
+            "jobId": job_id,
+            "log_tail": (log3_tail or "")[-4000:],
+        }
 
     
-    run_in_container("bash -lc 'echo ok > /home/job/output/heartbeat.txt'", job_dir, job_id, stage="post_heartbeat")
+    (out_dir / "heartbeat.txt").write_text("ok\n")
 
-    
     has_any = any(out_dir.rglob("*"))
-
-    
     logs_rel = f"/files/jobs/{job_id}/logs"
-    artifacts = [f"/jobs/{job_id}/archive"]  
+    artifacts = [f"/jobs/{job_id}/archive"]
 
     return {
         "status": "ok" if has_any else "empty",
         "jobId": job_id,
         "artifacts": artifacts,
         "logs": {
-            "rfdiffusion_tail": log1_tail[-4000:] if log1_tail else "",
-            "proteinmpnn_tail": log2_tail[-4000:] if log2_tail else "",
-            "rf2_tail": log3_tail[-4000:] if log3_tail else "",
+            "rfdiffusion_tail": (log1_tail or "")[-4000:],
+            "proteinmpnn_tail": (log2_tail or "")[-4000:],
+            "rf2_tail": (log3_tail or "")[-4000:],
             "logs_dir": logs_rel
         }
     }
