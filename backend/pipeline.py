@@ -127,6 +127,7 @@ def orchestrate_pipeline(
     rf_diffusion_deterministic: bool,
     rf_diffusion_diffuser_t: int,
     design_loops: str,
+    protein_mpnn_designs: int,
     framework_path_host: Path,
     target_path_host: Path,
 ) -> Dict[str, Any]:
@@ -195,6 +196,7 @@ def orchestrate_pipeline(
         "poetry run python /home/src/rfantibody/proteinmpnn/proteinmpnn_interface_design.py",
         f"-pdbdir {mpnn_in}",
         f"-outpdbdir {mpnn_out}",
+        f"-seqs_per_struct {protein_mpnn_designs}",
     ])
 
     code2, log2_tail = exec_in_worker(cmd2, job_dir, job_id, stage="proteinmpnn")
