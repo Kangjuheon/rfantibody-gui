@@ -46,7 +46,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
 
   // RFdiffusion 세부 파라미터
-  const [rfDiffusionFinalStep, setRfDiffusionFinalStep] = useState("50");
+  const [rfDiffusionFinalStep, setRfDiffusionFinalStep] = useState("48");
   const [rfDiffusionDeterministic, setRfDiffusionDeterministic] = useState(false);
   const [rfDiffusionDiffuserT, setRfDiffusionDiffuserT] = useState("50");
 
