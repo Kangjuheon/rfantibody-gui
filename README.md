@@ -40,7 +40,7 @@ docker compose up -d
 ```
 
 4. Waiting for intalling RFAntibody
-It may takes over 120s.
+It may takes over 240s.
 ```bash
 docker logs -f rfantibody-worker
 ```
