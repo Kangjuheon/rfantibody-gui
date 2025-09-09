@@ -52,9 +52,9 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
 
   // Default placeholders
-  const defaultHotspots = "A21, B14-21";
+  const defaultHotspots = "T305,T456";
   const defaultDesignLoops =
-    "H1_, H2.7, H3.5-13, L1.10-15, L2.10-15, L3.10-15";
+    "L1:8-13,L2:7,L3:9-11,H1:7,H2:6,H3:5-13";
 
   const generateDefaultJobName = () => {
     const now = new Date();
@@ -314,7 +314,7 @@ export default function App() {
                 </Label>
                 <Input
                   id="hotspots"
-                  placeholder="e.g., A21, B14-21"
+                  placeholder="e.g., T305,T456"
                   autoComplete="off"
                   value={
                     hotspotsIsPlaceholder
@@ -366,7 +366,7 @@ export default function App() {
                 </Label>
                 <Input
                   id="designLoops"
-                  placeholder="e.g., H1, H2:7, H3:5-13, L1:10-15"
+                  placeholder="e.g., L1:8-13,L2:7,L3:9-11,H1:7,H2:6,H3:5-13"
                   autoComplete="off"
                   value={
                     designLoopsIsPlaceholder
@@ -573,30 +573,22 @@ export default function App() {
                       {JSON.stringify(result, null, 2)}
                     </pre>
 
-                    {/* 아티팩트가 URL 리스트로 온 경우 다운로드 버튼 예시 */}
-                    {Array.isArray(result.artifacts) &&
-                      result.artifacts.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                          {result.artifacts.map(
-                            (url: string, i: number) => (
-                              <a
-                                key={i}
-                                href={url}
-                                target="_blank"
-                                rel="noreferrer"
-                              >
-                                <Button
-                                  variant="secondary"
-                                  className="h-8"
-                                >
-                                  <Download className="w-4 h-4 mr-2" />
-                                  Download {i + 1}
-                                </Button>
-                              </a>
-                            ),
-                          )}
-                        </div>
+                    {result.links?.download && (
+                    <div className="flex flex-wrap gap-2">
+                      {result.links.download.jobZip && (
+                        <a
+                          href={`${API_BASE}${result.links.download.jobZip}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          <Button variant="secondary" className="h-8">
+                            <Download className="w-4 h-4 mr-2" />
+                            Download Job ZIP
+                          </Button>
+                        </a>
                       )}
+                    </div>
+                  )}
                   </>
                 )}
               </CardContent>

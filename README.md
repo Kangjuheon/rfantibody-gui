@@ -19,17 +19,30 @@ A user-friendly graphical interface for RFantibody. This web-based GUI makes it 
 
 1. Clone the repository
 ```bash
-git clone https://github.com/Kangjuheon/rfantibody-ui.git
+git clone https://github.com/Kangjuheon/rfantibody-gui.git
 ```
 
 2. Navigate to project directory
 ```bash
-cd rfantibody-ui
+cd rfantibody-gui
+```
+
+3. Prepare RFAntibody
+```bash
+cd third_party/RFantibody
+bash include/download_weights.sh
 ```
 
 3. Launch Docker containers
 ```bash
+cd ../..
 docker compose up -d
+```
+
+4. Waiting for intalling RFAntibody
+It may takes over 240s.
+```bash
+docker logs -f rfantibody-worker
 ```
 
 ## 🌐 Access

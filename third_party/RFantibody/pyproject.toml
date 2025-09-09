@@ -1,0 +1,46 @@
+[tool.poetry]
+name = "rfantibody"
+version = "1.0.0"
+description = ""
+authors = [
+  "Nate Bennett <nrbennett2@gmail.com>",
+  "Joe Watchwell <joe.watchwell@gmail.com>"
+]
+readme = "README.md"
+packages = [
+{include = "rfantibody", from = "src"},
+{include = "include"},
+{include = "se3_transformer", from = "include/SE3Transformer"}
+]
+
+[[tool.poetry.source]]
+name = "pypi"
+priority = "primary"
+
+[[tool.poetry.source]]
+name = "pytorch"
+url = "https://download.pytorch.org/whl/cu118"
+priority = "explicit"
+
+[tool.poetry.dependencies]
+python = "3.10.*"
+torch = { version="2.3.*", source="pytorch" }
+torchaudio = "*"
+torchvision = "*"
+torch-utils = "*"
+numpy = "1.*"
+cuda-python = "11.8"
+hydra-core = "*"
+icecream = "*"
+opt-einsum = "*"
+dgl = { file = "./include/dgl/dgl-2.4.0+cu118-cp310-cp310-manylinux1_x86_64.whl" }
+e3nn = "*"
+pyrsistent = "*"
+
+[tool.poetry.group.test]
+optional = true
+
+[tool.poetry.group.test.dependencies]
+pytest = "^8.0.0"
+pandas = "*"
+
