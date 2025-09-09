@@ -36,6 +36,7 @@ bash include/download_weights.sh
 3. Launch Docker containers
 ```bash
 cd ../..
+# You start here once installed
 docker compose up -d
 ```
 
@@ -45,11 +46,18 @@ It may takes over 240s.
 docker logs -f rfantibody-worker
 ```
 
-## 🌐 Access
+5. 🌐 Access
 Open your browser and visit:
 ```
 http://localhost:2239
 ```
+
+6. After use
+To turn off,
+```bash
+docker compose down
+```
+
 
 ## 💡 Tips
 - Initial startup might take some time due to Docker image downloads
