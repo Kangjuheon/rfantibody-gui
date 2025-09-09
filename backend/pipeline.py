@@ -146,10 +146,12 @@ def orchestrate_pipeline(
     shutil.move(str(target_path_host), tg_host)
 
     loops_arg = parse_design_loops(design_loops)
-    hotspots_arg = parse_hotspots(hotspots)
+    if hotspots:
+        hotspots_arg = parse_hotspots(hotspots)
+    else:
+        hotspots_arg = '[]'
 
-    
-    
+
     rfd_out_prefix = out_dir / "ab_des"
     ensure_dirs(rfd_out_prefix)  
     logger.info(f"[job={job_id}] RFdiffusion output prefix: {rfd_out_prefix}")

@@ -96,9 +96,7 @@ export default function App() {
 
       // Hotspots: omit when empty to represent "null/none"
       const effHotspots = getEffectiveHotspots().trim();
-      if (effHotspots !== "") {
-        fd.append("hotspots", effHotspots);
-      }
+      fd.append("hotspots", effHotspots);
 
       fd.append("rfDiffusionDesigns", String(parseInt(rfDiffusionDesigns)));
       fd.append("designLoops", getEffectiveDesignLoops());

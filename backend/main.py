@@ -30,7 +30,7 @@ from pipeline import orchestrate_pipeline
 async def rfantibody_pipeline(
     jobName: str = Form(...),
     mode: str = Form(...),
-    hotspots: str = Form(...),
+    hotspots: str | None = Form(None),
     rfDiffusionDesigns: int = Form(...),
     designLoops: str = Form(""),
     rfDiffusionFinalStep: int = Form(48),
