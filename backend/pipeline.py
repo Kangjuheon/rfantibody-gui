@@ -123,7 +123,9 @@ def orchestrate_pipeline(
     mode: str,
     hotspots: str,
     rf_diffusion_designs: int,
-    protein_mpnn_designs: int,
+    rf_diffusion_final_step: int,
+    rf_diffusion_deterministic: bool,
+    rf_diffusion_diffuser_t: int,
     design_loops: str,
     framework_path_host: Path,
     target_path_host: Path,
@@ -159,6 +161,9 @@ def orchestrate_pipeline(
         "inference.ckpt_override_path=/home/weights/RFdiffusion_Ab.pt",
         f"ppi.hotspot_res={hotspots_arg}",
         f"inference.num_designs={rf_diffusion_designs}",
+        f"inference.final_step={rf_diffusion_final_step}",
+        f"inference.deterministic={'true' if rf_diffusion_deterministic else 'false'}",
+        f"diffuser.T={rf_diffusion_diffuser_t}",
         f"inference.output_prefix={rfd_out_prefix}",
     ]
     if loops_arg:
